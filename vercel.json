@@ -6,7 +6,7 @@
       "destination": "/api/gate"
     },
     {
-      "source": "/:path*",
+      "source": "/api/gate",
       "destination": "/api/gate"
     }
   ]
