@@ -131,11 +131,23 @@ let geoCache={};try{geoCache=JSON.parse(localStorage.getItem(geoCacheKey)||'{}')
 function saveGeo(){try{localStorage.setItem(geoCacheKey,JSON.stringify(geoCache))}catch(e){}}
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 function mapAddress(s){return [s.address,s.city,'Texas','USA'].filter(Boolean).join(', ')}
-function initMap(){if(routeMap||!window.L)return;routeMap=L.map('routeMap').setView([33.05,-96.8],9);L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',{attribution:'Tiles &copy; Esri',maxZoom:19}).on('tileerror',()=>{el('mapStatus').textContent='Street-map tiles are unavailable from this network. Store pins use the saved store coordinates; use the address list above if the map background is blocked.'}).addTo(routeMap);mapMarkers=L.layerGroup().addTo(routeMap)}
+let mapTilesFailed=false, lastMapPoints=[];
+function mapFallback(){
+ const host=el('routeMap');let fallback=el('mapFallback');
+ if(!fallback){fallback=document.createElement('div');fallback.id='mapFallback';fallback.style.cssText='position:absolute;inset:0;background:#edf3ee;z-index:900;overflow:auto;padding:14px;color:#243448';host.appendChild(fallback)}
+ fallback.replaceChildren();
+ const heading=document.createElement('div');heading.style.cssText='font-weight:700;margin-bottom:8px';heading.textContent='Store location overview · street tiles unavailable';fallback.appendChild(heading);
+ if(!lastMapPoints.length){const note=document.createElement('p');note.textContent='No verified coordinates available for this selection.';fallback.appendChild(note);return}
+ const w=900,h=310,pad=28, lats=lastMapPoints.map(p=>p.pos[0]),lons=lastMapPoints.map(p=>p.pos[1]);let minLat=Math.min(...lats),maxLat=Math.max(...lats),minLon=Math.min(...lons),maxLon=Math.max(...lons);const dLat=Math.max(.01,maxLat-minLat),dLon=Math.max(.01,maxLon-minLon);
+ const ns='http://www.w3.org/2000/svg',svg=document.createElementNS(ns,'svg');svg.setAttribute('viewBox','0 0 '+w+' '+h);svg.style.cssText='width:100%;height:310px;border:1px solid #d4e2d9;border-radius:8px;background:repeating-linear-gradient(0deg,#f8faf8,#f8faf8 34px,#e8f0e9 35px),repeating-linear-gradient(90deg,transparent,transparent 34px,#e8f0e9 35px)';
+ for(const pt of lastMapPoints){const x=pad+(pt.pos[1]-minLon)/dLon*(w-pad*2),y=h-pad-(pt.pos[0]-minLat)/dLat*(h-pad*2);const circle=document.createElementNS(ns,'circle');circle.setAttribute('cx',x);circle.setAttribute('cy',y);circle.setAttribute('r',12);circle.setAttribute('fill','#168568');svg.appendChild(circle);const t=document.createElementNS(ns,'text');t.setAttribute('x',x);t.setAttribute('y',y+4);t.setAttribute('fill','white');t.setAttribute('text-anchor','middle');t.setAttribute('font-size','11');t.setAttribute('font-weight','bold');t.textContent=pt.number;svg.appendChild(t)}
+ fallback.appendChild(svg);const note=document.createElement('p');note.style.cssText='font-size:12px;margin:8px 0';note.textContent='Pins show relative positions, not roads or a driving route. Select an address in the store list for directions.';fallback.appendChild(note);
+}
+function initMap(){if(routeMap||!window.L)return;routeMap=L.map('routeMap').setView([33.05,-96.8],9);const layer=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',{attribution:'Tiles &copy; Esri',maxZoom:19});layer.on('tileerror',()=>{mapTilesFailed=true;mapFallback()});layer.addTo(routeMap);mapMarkers=L.layerGroup().addTo(routeMap)}
 async function updateMap(list){
- const token=++mapRun;const panel=el('mapPanel');panel.style.display=list.length?'':'none';if(!list.length)return;
+ const token=++mapRun;lastMapPoints=[];const fb=el('mapFallback');if(fb)fb.remove();const panel=el('mapPanel');panel.style.display=list.length?'':'none';if(!list.length)return;
  const status=el('mapStatus');status.textContent='Loading store locations…';
- if(!window.L){status.textContent='Map requires an internet connection to load. Store addresses remain visible above.';return}
+ if(!window.L){status.textContent='Map library unavailable; store addresses remain visible above.';mapFallback();return}
  initMap();mapMarkers.clearLayers();setTimeout(()=>routeMap.invalidateSize(),50);
  let found=[],missed=0;
  for(let i=0;i<list.length;i++){
@@ -151,6 +163,7 @@ async function updateMap(list){
   }
   if(token!==mapRun)return;
   if(pos){
+   lastMapPoints.push({number:i+1,pos,store:s.store});if(mapTilesFailed)mapFallback();
    const pin=L.divIcon({className:'',html:'<div class="map-pin">'+(i+1)+'</div>',iconSize:[26,26],iconAnchor:[13,13]});
    const marker=L.marker(pos,{icon:pin}).addTo(mapMarkers);
    const info=document.createElement('div');const strong=document.createElement('strong');strong.textContent=(i+1)+'. '+s.store;info.append(strong,document.createElement('br'),document.createTextNode(mapAddress(s)));marker.bindPopup(info);found.push(pos);
@@ -158,7 +171,7 @@ async function updateMap(list){
   status.textContent='Mapped '+found.length+' of '+list.length+' stores'+(missed?' · '+missed+' location(s) not found':'')+'.';
   if(found.length===1)routeMap.setView(found[0],12);else if(found.length>1)routeMap.fitBounds(found,{padding:[35,35],maxZoom:13});
  }
- if(token===mapRun)status.textContent='Mapped '+found.length+' of '+list.length+' stores.'+(missed?' '+missed+' address(es) could not be located automatically.':'')+' Street map tiles provided by Esri.';
+ if(token===mapRun)status.textContent='Mapped '+found.length+' of '+list.length+' stores.'+(missed?' '+missed+' address(es) could not be located automatically.':'')+(mapTilesFailed?' Street tiles blocked; showing coordinate overview.':' Street map tiles provided by Esri.');
 }
 function render(){let name=employees.find(e=>e[0]===selected)[1];let list=(routes[selected]||{})[day]||[];el('name').textContent=name;el('route').textContent='Route '+selected;el('daytitle').textContent=day+' assignments';el('count').textContent=list.length+' assigned '+(list.length===1?'store':'stores');[...el('days').children].forEach(b=>{b.classList.toggle('active',b.textContent===day);b.setAttribute('aria-pressed',b.textContent===day?'true':'false')});if(!list.length){el('content').innerHTML='<div class="empty">No route assignments entered yet for this merchandiser on '+day+'.</div>';updateMap([]);return}let table=document.createElement('table');table.innerHTML='<thead><tr><th>Store</th><th>City</th><th>Address</th><th>Sequence</th></tr></thead>';let body=document.createElement('tbody');list.forEach(s=>{let tr=document.createElement('tr');[s.store,s.city,s.address,(s.sequence===undefined?'—':String(s.sequence))].forEach(t=>{let td=document.createElement('td');td.textContent=t;tr.appendChild(td)});body.appendChild(tr)});table.appendChild(body);el('content').replaceChildren(table);updateMap(list)}
 </script><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script><script>render();</script></body></html>
