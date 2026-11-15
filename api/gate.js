@@ -15,19 +15,47 @@ module.exports = function handler(req,res) {
     res.statusCode=503;
     return res.end('Dashboard access is not configured. Set DASHBOARD_PASSWORD in Vercel Production Environment Variables and redeploy.');
   }
-  const auth=req.headers.authorization||'';
-  let valid=false;
-  if(auth.startsWith('Basic ')){
-    try{
-      const decoded=Buffer.from(auth.slice(6),'base64').toString('utf8');
-      const separator=decoded.indexOf(':');
-      valid=separator>=0 && same(decoded.slice(separator+1),secret);
-    }catch(_){}
+  const cookieName='merch_session';
+  const signature=crypto.createHmac('sha256',secret).update('merch-login-v1').digest('hex');
+  const cookies=(req.headers.cookie||'').split(';').map(s=>s.trim());
+  const session=cookies.find(s=>s.startsWith(cookieName+'='));
+  const sessionValue=session?session.slice(cookieName.length+1):'';
+  let valid=sessionValue.length===signature.length&&same(sessionValue,signature);
+  const basic=req.headers.authorization||'';
+  if(!valid&&basic.startsWith('Basic ')){
+    try{const decoded=Buffer.from(basic.slice(6),'base64').toString('utf8');const separator=decoded.indexOf(':');valid=separator>=0&&same(decoded.slice(separator+1),secret)}catch(_){}
+  }
+  if(req.method==='POST'){
+    let body='';
+    req.on('data',chunk=>{body+=chunk;if(body.length>8192)req.destroy()});
+    req.on('end',()=>{
+      const data=new URLSearchParams(body);
+      const password=data.get('password')||'';
+      if(same(password,secret)){
+        res.setHeader('Set-Cookie',cookieName+'='+signature+'; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=2592000');
+        res.writeHead(303,{Location:'/'});return res.end();
+      }
+      res.writeHead(303,{Location:'/?error=1'});res.end();
+    });return;
+  }
+  if(req.url&&req.url.startsWith('/logout')){
+    res.setHeader('Set-Cookie',cookieName+'=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0');
+    res.writeHead(303,{Location:'/'});return res.end();
   }
   if(!valid){
-    res.setHeader('WWW-Authenticate','Basic realm="MERCH Route Dashboard", charset="UTF-8"');
-    res.statusCode=401;
-    return res.end('Password required');
+    if(req.method!=='GET'&&req.method!=='HEAD'){res.statusCode=405;return res.end('Method not allowed')}
+    const error=(req.url||'').includes('error=1');
+    const login=`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>DFW MERCH Dashboard — Sign In</title><style>
+    *{box-sizing:border-box}body{margin:0;min-height:100dvh;font-family:Arial,Helvetica,sans-serif;color:#fff;background:#06151c;display:flex;align-items:center;justify-content:center;overflow-x:hidden}
+    .aisle{position:fixed;inset:0;display:flex;justify-content:space-between;pointer-events:none;background:radial-gradient(ellipse at center,#143a45 0%,#061018 75%)}
+    .freezer{width:28%;height:100%;border:10px solid #15242c;background:repeating-linear-gradient(180deg,#12212a 0px,#12212a 8px,#08141b 9px,#08141b 160px);display:flex;flex-direction:column;justify-content:space-around;align-items:center;box-shadow:inset 0 0 35px #8befff55}
+    .box{width:80%;min-height:15%;border:2px solid #60727c;box-shadow:0 0 12px #ffffff22;display:grid;place-content:center;text-align:center;font-weight:900;font-size:clamp(13px,2vw,24px);border-radius:4px;text-shadow:0 2px 3px #000}
+    .pizza .box{background:linear-gradient(140deg,#7b1015,#180d10 55%,#ac3517);color:#fff}.pizza .box b{font-size:.65em;color:#ffe7a4}.asian .box{background:linear-gradient(140deg,#14772d,#061d16 65%,#60a621)}.asian .box b{font-size:.65em;color:#fff}
+    .overlay{position:fixed;inset:0;background:linear-gradient(90deg,#07141b33,#031118a8 30%,#031118a8 70%,#07141b33)}
+    main{position:relative;z-index:1;width:min(92vw,560px);padding:24px 0 36px;text-align:center}.skyline{font-size:35px;letter-spacing:7px;color:#11e5e8;text-shadow:0 0 20px #11e5e8}.dfw{font-size:clamp(45px,9vw,78px);font-weight:900;font-style:italic;line-height:1;text-shadow:0 2px 18px #000}.merch{font-size:clamp(37px,8vw,64px);font-weight:900;font-style:italic;line-height:1.1}.merch span{color:#10d7db}.subtitle{font-size:clamp(22px,5vw,39px);font-weight:700;font-style:italic;margin-bottom:22px}
+    form{border:2px solid #08e1e4;background:#061a23eF;box-shadow:0 0 24px #08dfe877;border-radius:27px;padding:clamp(18px,4vw,38px);text-align:left}label{display:block;font-size:13px;color:#bde6e8;margin:0 0 6px 4px}input{width:100%;padding:16px;border-radius:12px;border:1px solid #73949d;background:#152c36;color:#fff;font-size:17px;margin-bottom:16px}input:focus{outline:2px solid #0ee5e6}button{width:100%;border:1px solid #70ffff;border-radius:12px;background:linear-gradient(#06cfd1,#058c9b);color:white;font-size:22px;font-weight:800;padding:14px;cursor:pointer}.tagline{font-size:12px;text-align:center;margin-top:20px;color:#e5f4f4}.error{color:#ffb5b5;margin:0 0 14px;font-weight:bold}.footer{font-size:12px;color:#9fbfc7;margin-top:18px}@media(max-width:550px){.freezer{width:30%;opacity:.65}.box{font-size:11px}.skyline{font-size:24px}main{padding:14px 0}}
+    </style></head><body><div class="aisle"><div class="freezer pizza"><div class="box">RED BARON<b>PEPPERONI</b></div><div class="box">RED BARON<b>CLASSIC CRUST</b></div><div class="box">RED BARON<b>CHEESE</b></div></div><div class="freezer asian"><div class="box">bibigo<b>MANDU DUMPLINGS</b></div><div class="box">bibigo<b>RICE BOWLS</b></div><div class="box">bibigo<b>FRIED RICE</b></div></div></div><div class="overlay"></div><main><div class="skyline">✦ ▥ ▴ ▥ ✦</div><div class="dfw">DFW</div><div class="merch">MERCH<span>⌁</span></div><div class="subtitle">Dashboard</div><form method="post" action="/"><label for="username">Username</label><input id="username" name="username" autocomplete="username" placeholder="Username"><label for="password">Password</label><input id="password" name="password" type="password" autocomplete="current-password" placeholder="Password" required>${error?'<p class="error">Incorrect password. Please try again.</p>':''}<button type="submit">Log In</button><div class="tagline">In-Store Execution &nbsp; | &nbsp; Merchandising &nbsp; | &nbsp; Retail Readiness</div></form><div class="footer">DFW MERCH Operations</div></main></body></html>`;
+    res.setHeader('Content-Type','text/html; charset=utf-8');res.statusCode=200;return res.end(req.method==='HEAD'?undefined:login);
   }
   if(req.method!=='GET'&&req.method!=='HEAD'){res.setHeader('Allow','GET, HEAD');res.statusCode=405;return res.end('Method not allowed');}
   try{
