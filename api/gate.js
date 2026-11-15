@@ -42,7 +42,7 @@ module.exports = function handler(req,res) {
     if(req.method!=='GET'&&req.method!=='HEAD'){res.statusCode=405;return res.end('Method not allowed')}
     const error=(req.url||'').includes('error=1');
     const login=`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>DFW MERCH Dashboard — Sign In</title><style>
-    *{box-sizing:border-box}body{margin:0;min-height:100dvh;font-family:Arial,Helvetica,sans-serif;color:#fff;background:#06151c url('/merch.png') center center / cover no-repeat fixed;display:flex;align-items:center;justify-content:center;overflow-x:hidden}
+    *{box-sizing:border-box}body{margin:0;min-height:100dvh;font-family:Arial,Helvetica,sans-serif;color:#fff;background:#06151c url('/merch%202.png') center center / cover no-repeat fixed;display:flex;align-items:center;justify-content:center;overflow-x:hidden}
     .aisle{display:none!important;position:fixed;inset:0;display:flex;justify-content:space-between;pointer-events:none;background:radial-gradient(ellipse at center,#143a45 0%,#061018 75%)}
     .freezer{width:28%;height:100%;border:10px solid #15242c;background:repeating-linear-gradient(180deg,#12212a 0px,#12212a 8px,#08141b 9px,#08141b 160px);display:flex;flex-direction:column;justify-content:space-around;align-items:center;box-shadow:inset 0 0 35px #8befff55}
     .box{width:80%;min-height:15%;border:2px solid #60727c;box-shadow:0 0 12px #ffffff22;display:grid;place-content:center;text-align:center;font-weight:900;font-size:clamp(13px,2vw,24px);border-radius:4px;text-shadow:0 2px 3px #000}
