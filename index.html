@@ -143,12 +143,12 @@ function mapFallback(){
  for(const pt of lastMapPoints){const x=pad+(pt.pos[1]-minLon)/dLon*(w-pad*2),y=h-pad-(pt.pos[0]-minLat)/dLat*(h-pad*2);const circle=document.createElementNS(ns,'circle');circle.setAttribute('cx',x);circle.setAttribute('cy',y);circle.setAttribute('r',12);circle.setAttribute('fill','#168568');svg.appendChild(circle);const t=document.createElementNS(ns,'text');t.setAttribute('x',x);t.setAttribute('y',y+4);t.setAttribute('fill','white');t.setAttribute('text-anchor','middle');t.setAttribute('font-size','11');t.setAttribute('font-weight','bold');t.textContent=pt.number;svg.appendChild(t)}
  fallback.appendChild(svg);const note=document.createElement('p');note.style.cssText='font-size:12px;margin:8px 0';note.textContent='Pins show relative positions, not roads or a driving route. Select an address in the store list for directions.';fallback.appendChild(note);
 }
-function initMap(){if(routeMap||!window.L)return;routeMap=L.map('routeMap').setView([33.05,-96.8],9);const layer=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',{attribution:'Tiles &copy; Esri',maxZoom:19});layer.on('tileerror',()=>{mapTilesFailed=true;mapFallback()});layer.addTo(routeMap);mapMarkers=L.layerGroup().addTo(routeMap)}
+function initMap(){if(routeMap||!window.L)return;routeMap=L.map('routeMap').setView([33.05,-96.8],9);const layer=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',{attribution:'Tiles &copy; Esri',maxZoom:19});let tileErrors=0;layer.on('tileerror',()=>{tileErrors++;if(tileErrors>=1){mapTilesFailed=true;routeMap.removeLayer(layer);mapFallback();el('mapStatus').textContent='Street-map tiles are incomplete; showing all available store positions instead.'}});layer.addTo(routeMap);mapMarkers=L.layerGroup().addTo(routeMap)}
 async function updateMap(list){
- const token=++mapRun;lastMapPoints=[];const fb=el('mapFallback');if(fb)fb.remove();const panel=el('mapPanel');panel.style.display=list.length?'':'none';if(!list.length)return;
+ const token=++mapRun;lastMapPoints=[];const fb=el('mapFallback');if(fb&&!mapTilesFailed)fb.remove();const panel=el('mapPanel');panel.style.display=list.length?'':'none';if(!list.length)return;
  const status=el('mapStatus');status.textContent='Loading store locations…';
  if(!window.L){status.textContent='Map library unavailable; store addresses remain visible above.';mapFallback();return}
- initMap();mapMarkers.clearLayers();setTimeout(()=>routeMap.invalidateSize(),50);
+ initMap();mapMarkers.clearLayers();if(mapTilesFailed)mapFallback();setTimeout(()=>routeMap.invalidateSize(),50);
  let found=[],missed=0;
  for(let i=0;i<list.length;i++){
   if(token!==mapRun)return;
